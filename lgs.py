@@ -95,12 +95,17 @@ def find_input_by_attribute(driver, attribute, value):
 
 
 def giris_elemanları():
-    tcInput = find_input_by_attribute(driver, "placeholder", "T.C. Kimlik Numarası")
-    okulNoInput = find_input_by_attribute(driver, "placeholder", "Okul Numarası")
+    #tcInput = find_input_by_attribute(driver, "placeholder", "T.C. Kimlik Numarası")
+     #okulNoInput = find_input_by_attribute(driver, "placeholder", "Okul Numarası")
+    #tcInput = find_input_by_attribute(driver, "placeholder", "T.C. Kimlik No" )
+    #okulNoInput = find_input_by_attribute(driver, "placeholder","Okul No")
     #tcInput = driver.find_element(By.XPATH, '//input[(@id="TC_KIMLIK_NO") or (@id="ADAY_NO")or (@id="TCNO")]')
     #okulNoInput = driver.find_element(By.XPATH, '//input[(@id="OKULNO") or (@id="GUVENLIKNUMARASI")]')
+    tcInput = driver.find_element(By.XPATH, '//input[contains(@placeholder, "Kimlik")]')
+    okulNoInput = driver.find_element(By.XPATH, '//input[contains(@placeholder, "Okul")]')
     tcInput.clear()
     tcInput.send_keys(str(id))
+    okulNoInput.clear()
     okulNoInput.send_keys(str(okulNo))
     selectDay = Select(driver.find_element(By.NAME, "GUN"))
     selectDay.select_by_value(str(bDay))
