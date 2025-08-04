@@ -93,27 +93,166 @@ def yeni_sorgu():
 def find_input_by_attribute(driver, attribute, value):
     return driver.find_element(By.CSS_SELECTOR, f'input[{attribute}="{value}"]')
 
+def find_element_with_fallbacks(driver, selectors_list, element_name):
+    """
+    Birden fazla selector deneyerek elementi bulmaya çalışır
+    """
+    for selector_type, selector_value in selectors_list:
+        try:
+            element = driver.find_element(selector_type, selector_value)
+            print(f"{element_name} bulundu: {selector_type} = '{selector_value}'")
+            return element
+        except NoSuchElementException:
+            continue
+    
+    # Hiçbiri bulunamazsa hata fırlat
+    print(f"HATA: {element_name} bulunamadı. Denenen selectors:")
+    for selector_type, selector_value in selectors_list:
+        print(f"  - {selector_type}: '{selector_value}'")
+    
+    # Sayfanın kaynak kodunu kontrol etmek için
+    print("Sayfa kaynağında TC kimlik ile ilgili inputlar:")
+    page_source = driver.page_source.lower()
+    if 'kimlik' in page_source:
+        print("✓ 'kimlik' kelimesi sayfada bulundu")
+    if 'tc' in page_source:
+        print("✓ 'tc' kelimesi sayfada bulundu")
+    
+    raise NoSuchElementException(f"{element_name} için hiçbir selector çalışmadı")
+
+def fill_date_dropdowns():
+    """
+    Tarih dropdown'larını güvenli şekilde doldur
+    """
+    dropdown_selectors = [
+        ("GUN", str(bDay), "Gün"),
+        ("AY", str(bMonth), "Ay"), 
+        ("YIL", str(bYear), "Yıl")
+    ]
+    
+    for name_value, select_value, field_name in dropdown_selectors:
+        try:
+            # Farklı name değerleri dene
+            possible_names = [name_value, name_value.lower(), name_value.upper()]
+            dropdown_found = False
+            
+            for possible_name in possible_names:
+                try:
+                    dropdown = Select(driver.find_element(By.NAME, possible_name))
+                    dropdown.select_by_value(select_value)
+                    print(f"{field_name} seçildi: {select_value}")
+                    dropdown_found = True
+                    break
+                except NoSuchElementException:
+                    continue
+            
+            if not dropdown_found:
+                # ID ile de dene
+                try:
+                    dropdown = Select(driver.find_element(By.ID, name_value))
+                    dropdown.select_by_value(select_value)
+                    print(f"{field_name} (ID ile) seçildi: {select_value}")
+                except NoSuchElementException:
+                    print(f"UYARI: {field_name} dropdown'u bulunamadı")
+                    
+        except Exception as e:
+            print(f"UYARI: {field_name} seçilirken hata: {e}")
+
+def debug_page_elements():
+    """
+    Sayfadaki tüm input ve select elementlerini listele
+    """
+    print("\n=== SAYFA ELEMENT ANALIZI ===")
+    
+    # Tüm input elementleri
+    inputs = driver.find_elements(By.TAG_NAME, "input")
+    print(f"Toplam input sayısı: {len(inputs)}")
+    
+    for i, inp in enumerate(inputs):
+        try:
+            inp_type = inp.get_attribute("type") or "text"
+            inp_id = inp.get_attribute("id") or "N/A"
+            inp_name = inp.get_attribute("name") or "N/A"
+            inp_placeholder = inp.get_attribute("placeholder") or "N/A"
+            inp_class = inp.get_attribute("class") or "N/A"
+            
+            print(f"Input {i+1}: type={inp_type}, id={inp_id}, name={inp_name}, placeholder={inp_placeholder}, class={inp_class}")
+        except:
+            print(f"Input {i+1}: Element analiz edilemedi")
+    
+    # Tüm select elementleri
+    selects = driver.find_elements(By.TAG_NAME, "select")
+    print(f"\nToplam select sayısı: {len(selects)}")
+    
+    for i, sel in enumerate(selects):
+        try:
+            sel_id = sel.get_attribute("id") or "N/A"
+            sel_name = sel.get_attribute("name") or "N/A"
+            sel_class = sel.get_attribute("class") or "N/A"
+            
+            print(f"Select {i+1}: id={sel_id}, name={sel_name}, class={sel_class}")
+        except:
+            print(f"Select {i+1}: Element analiz edilemedi")
+    
+    print("=== ANALIZ TAMAMLANDI ===\n")
 
 def giris_elemanları():
-    #tcInput = find_input_by_attribute(driver, "placeholder", "T.C. Kimlik Numarası")
-     #okulNoInput = find_input_by_attribute(driver, "placeholder", "Okul Numarası")
-    #tcInput = find_input_by_attribute(driver, "placeholder", "T.C. Kimlik No" )
-    #okulNoInput = find_input_by_attribute(driver, "placeholder","Okul No")
-    #tcInput = driver.find_element(By.XPATH, '//input[(@id="TC_KIMLIK_NO") or (@id="ADAY_NO")or (@id="TCNO")]')
-    #okulNoInput = driver.find_element(By.XPATH, '//input[(@id="OKULNO") or (@id="GUVENLIKNUMARASI")]')
-    tcInput = driver.find_element(By.XPATH, '//input[contains(@placeholder, "Kimlik")]')
-    okulNoInput = driver.find_element(By.XPATH, '//input[contains(@placeholder, "Okul")]')
-    tcInput.clear()
-    tcInput.send_keys(str(id))
-    okulNoInput.clear()
-    okulNoInput.send_keys(str(okulNo))
-    selectDay = Select(driver.find_element(By.NAME, "GUN"))
-    selectDay.select_by_value(str(bDay))
-    selectMonth = Select(driver.find_element(By.NAME, "AY"))
-    selectMonth.select_by_value(str(bMonth))
-    selectYear = Select(driver.find_element(By.NAME, "YIL"))
-    selectYear.select_by_value(str(bYear))
-
+    try:
+        # TC Kimlik No için farklı selector alternatifleri
+        tc_selectors = [
+            (By.XPATH, '//input[contains(@placeholder, "T.C. Kimlik")]'),
+            (By.XPATH, '//input[contains(@placeholder, "Kimlik")]'),
+            (By.XPATH, '//input[contains(@placeholder, "T.C.")]'),
+            (By.XPATH, '//input[@id="TC_KIMLIK_NO"]'),
+            (By.XPATH, '//input[@id="TCNO"]'),
+            (By.XPATH, '//input[@id="ADAY_NO"]'),
+            (By.XPATH, '//input[@name="TC_KIMLIK_NO"]'),
+            (By.XPATH, '//input[@name="TCNO"]'),
+            (By.XPATH, '//input[contains(@class, "tc")]'),
+            (By.CSS_SELECTOR, 'input[placeholder*="Kimlik"]'),
+            (By.CSS_SELECTOR, 'input[placeholder*="T.C"]'),
+        ]
+        
+        # Okul No için farklı selector alternatifleri
+        okul_selectors = [
+            (By.XPATH, '//input[contains(@placeholder, "Okul")]'),
+            (By.XPATH, '//input[contains(@placeholder, "OKUL")]'),
+            (By.XPATH, '//input[@id="OKULNO"]'),
+            (By.XPATH, '//input[@id="GUVENLIKNUMARASI"]'),
+            (By.XPATH, '//input[@name="OKULNO"]'),
+            (By.XPATH, '//input[@name="OKUL_NO"]'),
+            (By.XPATH, '//input[contains(@class, "okul")]'),
+            (By.CSS_SELECTOR, 'input[placeholder*="Okul"]'),
+            (By.CSS_SELECTOR, 'input[placeholder*="OKUL"]'),
+        ]
+        
+        # Elementleri bul
+        tcInput = find_element_with_fallbacks(driver, tc_selectors, "TC Kimlik Input")
+        okulNoInput = find_element_with_fallbacks(driver, okul_selectors, "Okul No Input")
+        
+        # Verileri temizle ve gir
+        tcInput.clear()
+        tcInput.send_keys(str(id))
+        print(f"TC Kimlik girildi: {id}")
+        
+        okulNoInput.clear()
+        okulNoInput.send_keys(str(okulNo))
+        print(f"Okul No girildi: {okulNo}")
+        
+        # Dropdown'lar için güvenli seçim
+        fill_date_dropdowns()
+        
+    except Exception as e:
+        print(f"HATA - Giriş elemanları doldurulurken: {e}")
+        print(f"Mevcut URL: {driver.current_url}")
+        print(f"Sayfa başlığı: {driver.title}")
+        
+        # Hata durumunda sayfanın HTML'ini dosyaya kaydet
+        with open('hata_sayfa.html', 'w', encoding='utf-8') as f:
+            f.write(driver.page_source)
+        print("Sayfa kaynağı 'hata_sayfa.html' dosyasına kaydedildi")
+        
+        raise
 def uyarı_mesaj_guvenlik_metin():
     msg = QMessageBox()
     msg.setIcon(QMessageBox.Critical)
@@ -218,7 +357,12 @@ def sonucları_al():
             if int(bMonth) < 10:
                 bMonth = "0" + str(bMonth)
             
-            giris_elemanları()
+            try:
+                giris_elemanları()
+            except NoSuchElementException:
+                print("Element bulunamadı - Debug yapılıyor...")
+                debug_page_elements()
+                raise
             guvenlık_kodu_selector = (By.XPATH, '//input[(@id="GUVENLIKKODU") or (@id="gkodu")]')
             hata_kodu_selector = (By.ID, "hata")
             yeni_sayfada_hata_kodu_selector = (By.XPATH, "//p[@align='center']")
@@ -234,7 +378,12 @@ def sonucları_al():
                     hatakodutext = driver.find_element(By.XPATH, "//*[@id='hata']")
                     if hatakodutext.text == "Güvenlik Kodunu yanlış girdiniz!":
                         uyarı_mesaj_guvenlik_metin()
-                        giris_elemanları()
+                        try:
+                            giris_elemanları()
+                        except NoSuchElementException:
+                            print("Element bulunamadı - Debug yapılıyor...")
+                            debug_page_elements()
+                            raise
                         time.sleep(1)
                         tamam_button=driver.find_element(By.NAME, "Submit")
                         tamam_button.click()
@@ -256,7 +405,12 @@ def sonucları_al():
                         continue
                     else:
                         yeni_sorgu()
-                        giris_elemanları()
+                        try:
+                            giris_elemanları()
+                        except NoSuchElementException:
+                            print("Element bulunamadı - Debug yapılıyor...")
+                            debug_page_elements()
+                            raise
                         uyarı_mesaj_guvenlik_metin()
                         tamam_button=driver.find_element(By.NAME, "Submit")
                         tamam_button.click()
@@ -299,7 +453,7 @@ def sonucları_al():
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     get_input()
-    driver = webdriver.Chrome()
+    driver = webdriver.Chrome(options=chrome_options)  # options ekleyin
     driver.get(input_value)
     #driver.maximize_window()
     driver.implicitly_wait(1)
